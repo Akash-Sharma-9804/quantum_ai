@@ -16,6 +16,7 @@ import {
   CircleFadingArrowUp,
 } from "lucide-react";
 import { motion } from "framer-motion";
+import axios from "axios";
 
 export default function GeminiClone() {
   const [chats, setChats] = useState([]);
@@ -56,60 +57,75 @@ export default function GeminiClone() {
     setCurrentChat(null);
   };
 
+  const GEMINI_API_KEY = "AIzaSyAMPu-bJRESlhUlLoLPCdW_gqvuU3g5ZjE"; // Replace with your actual API key
+const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
+
+
   const sendMessage = async () => {
     if (!input.trim()) return;
 
     setLoading(true);
     let updatedChats = [...chats];
     let chatIndex = chats.findIndex((chat) => chat.id === currentChat);
+    let chatId = currentChat; // Store chatId before updating state
 
     if (chatIndex === -1) {
-      const newChat = {
-        id: Date.now(),
-        title: input,
-        messages: [{ sender: "user", text: input }],
-      };
-      updatedChats = [newChat, ...chats];
-      setCurrentChat(newChat.id);
+        const newChat = {
+            id: Date.now(),
+            title: input,
+            messages: [{ sender: "user", text: input }],
+        };
+        updatedChats = [newChat, ...chats];
+        setCurrentChat(newChat.id);
+        chatId = newChat.id; // Update the local variable
     } else {
-      updatedChats[chatIndex].messages.push({ sender: "user", text: input });
+        updatedChats[chatIndex].messages.push({ sender: "user", text: input });
     }
 
     setChats(updatedChats);
-    const userMessage = input;
     setInput("");
+    setBotTyping("Thinking...");
 
-    setTimeout(() => {
-      const responseText = `You said: ${userMessage}`;
-      let currentText = "";
-      setBotTyping("");
+    try {
+        const requestBody = {
+            contents: [{ parts: [{ text: input }] }]
+        };
+        
+        const response = await axios.post(GEMINI_API_URL, requestBody);
 
-      responseText.split("").forEach((char, index) => {
-        setTimeout(() => {
-          currentText += char;
-          setBotTyping(currentText);
-        }, index * 50);
-      });
+        const botResponse = response.data.candidates?.[0]?.content?.parts?.[0]?.text || "Sorry, I couldn't understand.";
 
-      setTimeout(() => {
         setChats((prevChats) =>
-          prevChats.map((chat) =>
-            chat.id === currentChat
-              ? {
-                  ...chat,
-                  messages: [
-                    ...chat.messages,
-                    { sender: "bot", text: responseText },
-                  ],
-                }
-              : chat
-          )
+            prevChats.map((chat) =>
+                chat.id === chatId  // Using stored chatId instead of currentChat
+                    ? {
+                        ...chat,
+                        messages: [...chat.messages, { sender: "bot", text: botResponse }],
+                    }
+                    : chat
+            )
         );
-        setBotTyping("");
-        setLoading(false);
-      }, responseText.length * 50 + 500);
-    }, 1500);
-  };
+    } catch (error) {
+        console.error("API Error:", error);
+        setChats((prevChats) =>
+            prevChats.map((chat) =>
+                chat.id === chatId
+                    ? {
+                        ...chat,
+                        messages: [
+                            ...chat.messages,
+                            { sender: "bot", text: "Error getting response. Try again." },
+                        ],
+                    }
+                    : chat
+            )
+        );
+    }
+
+    setBotTyping("");
+    setLoading(false);
+};
+
 
   return (
     <div
@@ -243,7 +259,7 @@ export default function GeminiClone() {
                 key={index}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className={`p-3 rounded-lg max-w-md break-words whitespace-pre-wrap 
+                className={`p-3 rounded-lg max-w-3xl break-words whitespace-pre-wrap 
              ${
                msg.sender === "user"
                  ? "bg-blue-500 text-white self-end ml-auto"
@@ -269,7 +285,7 @@ export default function GeminiClone() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 0.5 }}
-              className="p-3 rounded-lg max-w-xs bg-gray-200 text-black self-start mr-auto">
+              className="p-3 rounded-lg max-w-xl bg-gray-200 text-black self-start mr-auto">
               <div className="flex items-center gap-2">
                 <Bot size={18} />
                 <span>{botTyping}</span>
